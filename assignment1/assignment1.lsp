@@ -55,7 +55,7 @@ to provide the current alpha value."
   (let ((q-table (make-q-table (+ heap-size 6) 3)))
     (dotimes (i num-iterations)
       (do ((state 0))
-	  ((> state heap-size) q-table)
+	  ((> state (- heap-size 1)) q-table)
 	(let ((old-state state) (my-action (max-action q-table state (random-elt '(0 1 2)))) (op-action (random-elt '(0 1 2))) (reward 0))
 	  (setf state (+ state my-action 1))
 	  (if (eq 1 (- heap-size state))
@@ -64,7 +64,7 @@ to provide the current alpha value."
 		(setf state (+ state op-action 1))
 		(if (eq 1 (- heap-size state))
 		    (setf reward -1))))
-	  (setf q-table (q-learner reward old-state my-action state gamma alpha-function i)))))))
+	  (setf q-table (q-learner q-table reward old-state my-action state gamma alpha-func i)))))q-table))
 
 (defun make-your-move()
   "This should be the move that the computer makes")
@@ -92,7 +92,7 @@ move made"
   "Plays a game of nim.  Asks if the user wants to play first,
 then has the user play back and forth with the game until one of
 them wins.  Reports the winner."
-  (let ((previous-play '()))
+  (let ((previous-play '()) (original-heap heap-size))
     (loop
        do(if (eql heap-size 1)
 	     (progn
@@ -105,18 +105,22 @@ them wins.  Reports the winner."
 		   (if (ask-if-user-goes-first)
 		       (progn
 			 (setf previous-play 1)
-			 (setf heap-size (- heap-size (make-user-move))))
+			 (setf heap-size (- heap-size (make-user-move)))
+			 (format t "~A:~A~%" "Heap size" heap-size))
 		       (progn
 			 (setf previous-play 0)
-			 (setf heap-size (- heap-size (make-your-move q-table heap-size))))))
+			 (setf heap-size (- heap-size ( + (make-your-move q-table (- original-heap heap-size)) 1)))
+			 (format t "~A:~A~%" "Heap size" heap-size))))
 		 (progn
-		   (if (eql previous-play 1)
+		   (if (eql previous-play 0)
 		       (progn
 			 (setf previous-play 1)
-			 (setf heap-size (- heap-size (make-user-move))))
+			 (setf heap-size (- heap-size (make-user-move)))
+			 (format t "~A:~A~%" "Heap size" heap-size))
 		       (progn
 			 (setf previous-play 0)
-			 (setf heap-size (- heap-size (make-your-move q-table heap-size)))))))))))
+			 (setf heap-size (- heap-size (+ (make-your-move q-table (- original-heap heap-size)) 1)))
+			 (format t "~A:~A~%" "Heap size computer move" heap-size)))))))))
       
   
 
