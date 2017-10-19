@@ -225,7 +225,7 @@ and the final W matrix of the learned network."
 		  (progn
 		    (let ((e '()))
 		      (dolist (j converted-data)
-			(setf e (append e (net-error (forward-propagate j v w) (last (first j))))))
+			(setf e (append e (net-error (forward-propagate j v w) (last (second j))))))
 		      (if (eql t print-all-errors)
 			  (print e)
 			  (progn
@@ -250,7 +250,7 @@ and use a modulo of MAX-ITERATIONS."
   (let* ((data-count (length data)) (train-data (subseq data 0 (floor (/ data-count 2)))) (test-data (subseq data (ceiling (/ data-count 2))))
 	 (weights (net-build train-data num-hidden-units alpha initial-bounds max-iterations max-iterations)) (e '()))
     (dolist (i (convert-data test-data))
-      (setf e (append e (net-error (forward-propagate i (first weights) (second weights)) (last (first i))))))
+      (setf e (append e (net-error (forward-propagate i (first weights) (second weights)) (last (second i))))))
     (average (mapcar #'first e))))
 
 
@@ -267,7 +267,7 @@ and use a modulo of MAX-ITERATIONS."
 	     (test-data (subseq data (* (1- i) k) (* i k)))
 	     (weights (net-build train-data num-hidden-units alpha initial-bounds max-iterations max-iterations)))
 	(dolist (i (convert-data test-data))
-	  (setf e (append e (net-error (forward-propagate i (first weights) (second weights)) (last (first i))))))))
+	  (setf e (append e (net-error (forward-propagate i (first weights) (second weights)) (last (second i))))))))
     (average (mapcar #'first e))))
 	
 
