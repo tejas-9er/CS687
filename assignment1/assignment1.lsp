@@ -39,16 +39,18 @@ else val is returned instead when there's a tie. If state is outside the range, 
       (random-elt bag))))
 
 (defparameter *basic-alpha* 0.5 "A simple alpha constant")
-(defun basic-alpha (iteration)
-  (declare (ignore iteration)) ;; quiets compiler complaints
-  *basic-alpha*)
 
-(defun q-learner (q-table reward current-state action next-state gamma alpha-func iteration)
+(defun basic-alpha (iteration num-iterations)
+  "We try to vary the alpha value propotional 
+to the iteration we are in"
+  ;;(declare (ignore iteration num-iterations))
+  ;;*basic-alpha*)
+  (/ iteration num-iterations))
+
+(defun q-learner (q-table reward current-state action next-state gamma alpha-func iteration num-iterations)
   "Modifies the q-table and returns it.  alpha-func is a function which must be called
 to provide the current alpha value."
-
-  ;;; IMPLEMENT ME
-  )
+  (setf (aref q-table current-state action) (+ (* (- 1 (apply alpha-func (list iteration num-iterations))) (aref q-table current-state action)) (* (apply alpha-func (list iteration num-iterations))(+ reward (* gamma (aref q-table next-state (max-action q-table next-state))))))) q-table)
 
 (defun learn-nim (heap-size gamma alpha-func num-iterations)
   "Returns a q-table after learning how to play nim"
@@ -64,10 +66,8 @@ to provide the current alpha value."
 		(setf state (+ state op-action 1))
 		(if (eq 1 (- heap-size state))
 		    (setf reward -1))))
-	  (setf q-table (q-learner q-table reward old-state my-action state gamma alpha-func i)))))q-table))
+	  (setf q-table (q-learner q-table reward old-state my-action state gamma alpha-func i num-iterations)))))q-table))
 
-(defun make-your-move()
-  "This should be the move that the computer makes")
 
 (defun ask-if-user-goes-first ()
   "Returns true if the user wants to go first"
@@ -77,7 +77,7 @@ to provide the current alpha value."
   "Returns the number of sticks the user wants to remove"
   (let ((result))
     (loop
-     (format t "~%Take how many sticks?  ")
+     (format t "~%Take how many sticks?  ~%")
      (setf result (read))
      (when (and (numberp result) (<= result 3) (>= result 1))
        (return result))
@@ -86,7 +86,7 @@ to provide the current alpha value."
 (defun make-your-move(q-table heap-size)
   "Makes move for the agent and returns the 
 move made"
-  '1)
+  (max-action q-table heap-size))
 
 (defun play-nim (q-table heap-size)
   "Plays a game of nim.  Asks if the user wants to play first,
@@ -106,21 +106,21 @@ them wins.  Reports the winner."
 		       (progn
 			 (setf previous-play 1)
 			 (setf heap-size (- heap-size (make-user-move)))
-			 (format t "~A:~A~%" "Heap size" heap-size))
+			 (format t "~A:~A~%" "Heap size after your move" heap-size))
 		       (progn
 			 (setf previous-play 0)
 			 (setf heap-size (- heap-size ( + (make-your-move q-table (- original-heap heap-size)) 1)))
-			 (format t "~A:~A~%" "Heap size" heap-size))))
+			 (format t "~A:~A~%" "Heap size after computer move" heap-size))))
 		 (progn
 		   (if (eql previous-play 0)
 		       (progn
 			 (setf previous-play 1)
 			 (setf heap-size (- heap-size (make-user-move)))
-			 (format t "~A:~A~%" "Heap size" heap-size))
+			 (format t "~A:~A~%" "Heap size after your move" heap-size))
 		       (progn
 			 (setf previous-play 0)
 			 (setf heap-size (- heap-size (+ (make-your-move q-table (- original-heap heap-size)) 1)))
-			 (format t "~A:~A~%" "Heap size computer move" heap-size)))))))))
+			 (format t "~A:~A~%" "Heap size after computer move" heap-size)))))))))
       
   
 
@@ -130,4 +130,7 @@ them wins.  Reports the winner."
   ;; hint: see optional value in max-action function
 
   ;;; IMPLEMENT ME
-  )
+  (format t "| ~A | ~A |~%" "State" "Action")
+  (dotimes (i (num-states q-table))
+    (format t "|  ~A    |  ~S     |~%" i (max-action q-table i '-))))
+

@@ -221,7 +221,7 @@ and the final W matrix of the learned network."
 	(dotimes (i max-iterations)
 	  (let ((converted-data (shuffle (convert-data data))))
 	    (dolist (datum converted-data)
-	      (if (eql 0 (mod i modulo))
+	      (if (and (eql 0 (mod i modulo)) (not (eql 0 i)))
 		  (progn
 		    (let ((e '()))
 		      (dolist (j converted-data)
@@ -241,16 +241,36 @@ and the final W matrix of the learned network."
 			  
        
 
-#|
-
 
 (defun simple-generalization (data num-hidden-units alpha initial-bounds max-iterations)
   "Given a set of data, trains a neural network on the first half
 of the data, then tests generalization on the second half, returning
 the average error among the samples in the second half.  Don't print any errors,
 and use a modulo of MAX-ITERATIONS."
-  )
-|#
+  (let* ((data-count (length data)) (train-data (subseq data 0 (floor (/ data-count 2)))) (test-data (subseq data (ceiling (/ data-count 2))))
+	 (weights (net-build train-data num-hidden-units alpha initial-bounds max-iterations max-iterations)) (e '()))
+    (dolist (i (convert-data test-data))
+      (setf e (append e (net-error (forward-propagate i (first weights) (second weights)) (last (first i))))))
+    (average (mapcar #'first e))))
+
+
+(defun k-fold-validation (data k num-hidden-units alpha initial-bounds max-iterations)
+  "Given a set of data, performs k-fold validation on this data for
+the provided value of k, by training the network on (k-1)/k of the data,
+then testing generalization on the remaining 1/k of the data.  This is
+done k times for different 1/k chunks (and building k different networks).
+The average error among all tested samples is returned.  Don't print any errors,
+and use a modulo of MAX-ITERATIONS."
+  (let ((e '()))
+    (dotimes (j k)
+      (let* ((i (1+ j)) (train-data (concatenate 'list (subseq data 0 (* (1- i) k)) (subseq data (* (1+ i) k))))
+	     (test-data (subseq data (* (1- i) k) (* i k)))
+	     (weights (net-build train-data num-hidden-units alpha initial-bounds max-iterations max-iterations)))
+	(dolist (i (convert-data test-data))
+	  (setf e (append e (net-error (forward-propagate i (first weights) (second weights)) (last (first i))))))))
+    (average (mapcar #'first e))))
+	
+
 
 (defun scale-list (lis)
   "Scales a list so the minimum value is 0.1 and the maximum value is 0.9.  Don't use this function, it's just used by scale-data."
