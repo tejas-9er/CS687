@@ -217,7 +217,7 @@ is met (see below):
 The function should return a list of two items: the final V matrix
 and the final W matrix of the learned network."
   (let ((v (make-random-matrix num-hidden-units (1+ (length (first (first data)))) initial-bounds))
-	  (w (make-random-matrix (length (last (first data))) num-hidden-units initial-bounds)))
+	  (w (make-random-matrix (length (first (last (first data)))) num-hidden-units initial-bounds)))
 	(dotimes (i max-iterations)
 	  (let ((converted-data (shuffle (convert-data data))))
 	    (dolist (datum converted-data)
@@ -225,7 +225,7 @@ and the final W matrix of the learned network."
 		  (progn
 		    (let ((e '()))
 		      (dolist (j converted-data)
-			(setf e (append e (net-error (forward-propagate j v w) (last (second j))))))
+			(setf e (append e (net-error (forward-propagate j v w) (first (last j))))))
 		      (if (eql t print-all-errors)
 			  (print e)
 			  (progn
@@ -250,7 +250,7 @@ and use a modulo of MAX-ITERATIONS."
   (let* ((data-count (length data)) (train-data (subseq data 0 (floor (/ data-count 2)))) (test-data (subseq data (ceiling (/ data-count 2))))
 	 (weights (net-build train-data num-hidden-units alpha initial-bounds max-iterations max-iterations)) (e '()))
     (dolist (i (convert-data test-data))
-      (setf e (append e (net-error (forward-propagate i (first weights) (second weights)) (last (second i))))))
+      (setf e (append e (net-error (forward-propagate i (first weights) (second weights)) (first (last i))))))
     (average (mapcar #'first e))))
 
 
@@ -267,7 +267,7 @@ and use a modulo of MAX-ITERATIONS."
 	     (test-data (subseq data (* (1- i) k) (* i k)))
 	     (weights (net-build train-data num-hidden-units alpha initial-bounds max-iterations max-iterations)))
 	(dolist (i (convert-data test-data))
-	  (setf e (append e (net-error (forward-propagate i (first weights) (second weights)) (last (second i))))))))
+	  (setf e (append e (net-error (forward-propagate i (first weights) (second weights)) (last i)))))))
     (average (mapcar #'first e))))
 	
 
