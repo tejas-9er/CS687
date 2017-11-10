@@ -145,8 +145,8 @@ given allele in a child will mutate.  Mutation simply flips the bit of the allel
 	    (setf (aref child2 i) (aref ind1 i))))
       (if (< (random 1.0) *boolean-mutation-probability*)
 	    (setf (aref child1 i) (if(= (aref child1 i) 0) 1 0));;flip bit for child 2
-	    (setf (aref child2 i) (if(= (aref child2 i) 0) 1 0))))
-    (list child1 child2)));;flip bit for child 2
+	    (setf (aref child2 i) (if(= (aref child2 i) 0) 1 0))));;flip bit for child 2
+    (list child1 child2)))
 
 (defun boolean-vector-evaluator (ind1)
   "Evaluates an individual, which must be a boolean-vector, and returns
