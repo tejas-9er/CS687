@@ -191,3 +191,209 @@ given allele in a child will mutate.  Mutation does gaussian convolution on the 
   (setf *float-mutation-probability* mutation-probability)
   (setf *float-mutation-variance* mutation-variance))
   
+(defun make-queue ()
+  "Makes a random-queue"
+  (make-array '(0) :adjustable t :fill-pointer t))
+(defun enqueue (elt queue)
+  "Enqueues an element in the random-queue"
+  (progn (vector-push-extend elt queue) queue))
+(defun queue-empty-p (queue)
+  "Returns t if random-queue is empty"
+  (= (length queue) 0))
+(defun random-dequeue (queue)
+  "Picks a random element in queue and removes and returns it.
+Error generated if the queue is empty."
+  (let ((index (random (length queue))))
+    (swap (elt queue index) (elt queue (1- (length queue))))
+    (vector-pop queue)))
+(defparameter *nonterminal-set* '((+ 2) (- 2) (* 2) (% 2) (sin 1) (cos 1) (exp 1)))
+(defparameter *terminal-set* '(x))
+
+(defun ptc2(size)
+  "If size=1, just returns a random terminal.  Else builds and
+returns a tree by repeatedly extending the tree horizon with
+nonterminals until the total number of nonterminals in the tree,
+plus the number of unfilled slots in the horizon, is >= size.
+Then fills the remaining slots in the horizon with terminals.
+Terminals like X should be added to the tree
+in function form (X) rather than just X."
+  (if (eql size 1)
+      (return-from ptc2 (list (random-elt *terminal-set*))))
+  (let ((tree (make-queue)) (count 0)(root (make-queue)) (remaining-slots 0))
+    (loop while (> size (+ count (length tree)))
+       do (progn
+	    (let ((curr-elt (random-elt *nonterminal-set*)))
+	      (if (queue-empty-p tree)
+		  (progn
+		    (enqueue curr-elt tree)
+		    (enqueue (list (first curr-elt)) root)
+		    (setf count (1+ count)))
+		  (progn
+		    (let ((slot (random (length tree))))
+		      (loop while (eql (second (elt tree slot)) 0)
+			 do (progn
+			      (setf slot (random (length tree)))))
+		      (enqueue curr-elt tree)
+		      (enqueue (list (first curr-elt)) root)
+		      (setf (elt tree slot) (list (first (elt tree slot)) (1- (second (elt tree slot)))))
+		      (setf (elt root slot) (append (elt root slot) (cons (1- (length tree)) nil)))
+		      (setf count (1+ count))))))))
+	 (dotimes (i (length tree))
+	   (setf remaining-slots (+ remaining-slots (second (elt tree i)))))
+    (loop while (> remaining-slots 0)
+       do (let ((slot (random (length tree))))
+	  (loop while (or (eql (length (elt tree slot)) 1) (eql (second (elt tree slot)) 0))
+	      do (progn
+		(setf slot (random (length tree)))))
+	  (let ((curr-elt (random-elt *terminal-set*)))
+	    (enqueue  (list curr-elt) tree)
+	    (enqueue (list curr-elt) root)
+	    (setf (elt tree slot) (list (first (elt tree slot)) (1- (second (elt tree slot)))))
+	    (setf (elt root slot) (append (elt root slot) (cons (1- (length tree)) nil)))))
+	 (setf remaining-slots (1- remaining-slots)))
+    (let ((tree-size (1- (length root))))
+      (loop while (>= tree-size 0)
+	  do (if (> (length (elt root tree-size)) 1)
+	      (let ((temp '()) (curr-elt (elt root tree-size)))
+		(dotimes (i (length (elt root tree-size)))
+		  (if (= i 0)
+		      (setf temp (append temp (list (first curr-elt))))
+		      (setf temp (append temp (list (elt root (elt curr-elt i)))))))
+		(setf (elt root tree-size) temp)))
+	(setf tree-size (1- tree-size))))
+    (elt root 0)))
+
+
+
+(defparameter *size-limit* 20)
+
+(defun gp-creator()
+  (let ((tree-size (random *size-limit*)))
+    (loop while (eql tree-size 0)
+	while (setf tree-size (random *size-limit*)))
+    (ptc2 tree-size)))
+		  
+(defun num-nodes (tree)
+  (if (or (not (consp tree))(=  (length tree) 1))
+      '0
+      (let ((node-count 0))
+	(dolist (i tree)
+	  (setf node-count (+ node-count (num-nodes i))))
+	(1+ node-count))))
+(defun get-tree-size(tree size)
+  (dolist (i tree)
+    (if (consp i)
+	(setf size (get-tree-size i size))
+	(setf size (1+ size))))
+  size)
+
+(defun nth-subtree-parent-helper (tree count n)
+  ;(format t "Received tree ~A ~%" tree)
+  (let ((child-count -1))
+    (dolist (i tree)
+      (if (equal count n)
+	  (return-from nth-subtree-parent-helper (list tree child-count))
+	  (progn
+	    (if (consp i)
+		(let ((received (nth-subtree-parent-helper i count n)))
+		  (if (consp received)
+		      (return-from nth-subtree-parent-helper received)
+		      (progn
+			(setf count (+ count  (get-tree-size i 0)))
+			(setf child-count (1+ child-count)))))
+		(progn
+		  (setf count (1+ count))
+		  (setf child-count (1+ child-count)))))))
+	(- n count)))
+
+(defun nth-subtree-parent(tree n)
+  ;(format t "I am being called ~%")
+  (nth-subtree-parent-helper tree -1 n))
+
+(defparameter *mutation-size-limit* 10)
+
+(defun make-deep-copy (tree)
+  (let ((copy-tree '()))
+    (dolist (i tree)
+      (if (consp i)
+	  (setf copy-tree (append copy-tree (cons (make-deep-copy i) nil) ))
+	  (setf copy-tree (append copy-tree (cons i nil)))))
+    copy-tree))
+
+(defun copy-modify-tree(tree fsub-tree msub-tree)
+  (let ((child '()))
+    (dolist (i tree)
+     ;(format t "list element: ~A compared: ~A ~%" i (first fsub-tree))
+      (if (and (consp i) (equal i (first fsub-tree)))
+	  (let ((temp '()) (child-count -1))
+	    (dolist (j i)
+	      (if(equal child-count (second fsub-tree))
+		 (setf temp (append temp (cons  msub-tree nil)))
+		 (progn
+		   (if (consp j)
+		       (setf temp (append temp (cons (make-deep-copy j) nil)))
+		       (setf temp (append temp (cons j nil))))))
+	      (setf child-count (1+ child-count)))
+	    (setf child (append child (cons temp nil))))
+	  (if (consp i)
+	      (setf child (append child (cons (copy-modify-tree i fsub-tree msub-tree) nil)))
+	      (setf child (append child (cons i nil))))))
+    child))
+		   
+(defun gp-modifier (ind1 ind2)
+  ;(format t "Received ind1 : ~A ind2 :~A ~%" ind1 ind2)
+  (if (random?)
+      (let ((child1 '()) (child2 '()) (subtree1 '()) (subtree2 '()))
+	(setf subtree1 (nth-subtree-parent ind1 (random (get-tree-size ind1 0) )))
+	(setf subtree2 (nth-subtree-parent ind2 (random (get-tree-size ind2 0))))
+	(if (and (consp subtree2) (consp subtree1))
+	    (progn
+	      (setf child1 (copy-modify-tree ind1 subtree1 (nth (+ (second subtree2) 1) (first subtree2))))
+	      (setf child2 (copy-modify-tree ind2 subtree2 (nth (+ (second subtree1) 1) (first subtree1)))))
+	    (progn
+	      (setf child1 (make-deep-copy ind1))
+	      (setf child2 (make-deep-copy ind2))))
+	(list child1 child2))
+      (let ((child1 '()) (child2 '()) (subtree1 '()) (subtree2 '()))
+	(setf subtree1 (nth-subtree-parent ind1 (random (get-tree-size ind1 0))))
+	(setf subtree2 (nth-subtree-parent ind2 (random (get-tree-size ind2 0))))
+	(if (consp subtree1)
+	    (setf child1 (copy-modify-tree ind1 subtree1 (ptc2 (1+ (random 5)))))
+	    (setf child1 (make-deep-copy ind1)))
+	(if (consp subtree2)
+	    (setf child2 (copy-modify-tree ind2 subtree2 (ptc2 (1+ (random 5)))))
+	    (setf child2 (make-deep-copy ind2)))
+	(list child1 child2))))
+	
+
+;;; GP SYMBOLIC REGRESSION SETUP
+;;; (I provide this for you)
+
+(defparameter *num-vals* 20)
+(defparameter *vals* nil) ;; gets set in gp-setup
+
+(defun gp-symbolic-regression-setup ()
+  "Defines the function sets, and sets up vals"
+
+  (setq *nonterminal-set* '((+ 2) (- 2) (* 2) (% 2) (sin 1) (cos 1) (exp 1)))
+  (setq *terminal-set* '(x))
+
+  (setq *vals* nil)
+  (dotimes (v *num-vals*)
+    (push (1- (random 2.0)) *vals*)))
+
+(defun poly-to-learn (x) (+ (* x x x x) (* x x x) (* x x) x))
+
+;; define the function set
+(defparameter *x* nil) ;; to be set in gp-evaluator
+(defun x () *x*)
+(defun % (x y) (if (= y 0) 0 (/ x y)))  ;; "protected division"
+;;; the rest of the functions are standard Lisp functions
+
+
+(defun gp-symbolic-regression-evaluator (ind)
+  (let ((z 0))
+    (dolist (i *vals*)
+      (setf *x* i)
+      (setf z (+ z (abs (- (poly-to-learn *x*) (handler-case (eval ind) (error (condition) (format t "~%Warning, ~a" condition) most-positive-fixnum)))))))
+    (/ 1 (1+ z))))
