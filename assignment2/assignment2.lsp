@@ -397,3 +397,220 @@ in function form (X) rather than just X."
       (setf *x* i)
       (setf z (+ z (abs (- (poly-to-learn *x*) (handler-case (eval ind) (error (condition) (format t "~%Warning, ~a" condition) most-positive-fixnum)))))))
     (/ 1 (1+ z))))
+
+(defparameter *map-strs* '(
+".###............................"
+"...#............................"
+"...#.....................###...."
+"...#....................#....#.."
+"...#....................#....#.."
+"...####.#####........##........."
+"............#................#.."
+"............#.......#..........."
+"............#.......#..........."
+"............#.......#........#.."
+"....................#..........."
+"............#..................."
+"............#................#.."
+"............#.......#..........."
+"............#.......#.....###..."
+".................#.....#........"
+"................................"
+"............#..................."
+"............#...#.......#......."
+"............#...#..........#...."
+"............#...#..............."
+"............#...#..............."
+"............#.............#....."
+"............#..........#........"
+"...##..#####....#..............."
+".#..............#..............."
+".#..............#..............."
+".#......#######................."
+".#.....#........................"
+".......#........................"
+"..####.........................."
+         "................................"))
+
+(defparameter *map-height* 32)
+(defparameter *map-width* 32)
+;; The four directions.  For relative direction, you might
+;; assume that the ant always PERCEIVES things as if it were
+;; facing north.
+(defconstant *n* 0)
+(defconstant *e* 1)
+(defconstant *s* 2)
+(defconstant *w* 3)
+
+;;; some useful functions for you
+
+(defun make-map (lis)
+  "Makes a map out of a string-list such as *MAP-STRS*"
+  (let ((map (make-array (list (length (first lis)) (length lis)))))
+    (dotimes (y (length lis) map)
+      (dotimes (x (length (elt lis y)))
+  (setf (aref map x y)
+              (cond ((equalp #\# (elt (elt lis y) x)) nil)
+            (t t)))))))
+
+(defun direction-to-arrow (dir)
+  "Returns a character which represents a given direction -- might
+be useful for showing the movement along a path perhaps..."
+  (cond ((= dir *n*) #\x)
+  ((= dir *s*) #\v)
+  ((= dir *e*) #\>)
+  (t #\<)))
+
+
+(defun maparray (function array &optional (same-type nil))
+  "Maps function over array in its major order.  If SAME-TYPE,
+then the new array will have the same element type as the old
+array; but if a function returns an invalid element then an error
+may occur.  If SAME-TYPE is NIL, then the array will accommodate
+any type."
+  (let ((new-array (apply #'make-array (array-dimensions array)
+          :element-type (if same-type
+                    (array-element-type array)
+                t)
+            :adjustable (adjustable-array-p array)
+              (if (vectorp array)
+                  `(:fill-pointer ,(fill-pointer array))
+              nil))))
+    (dotimes (x (array-total-size array) new-array)
+      (setf (row-major-aref new-array x)
+          (funcall function (row-major-aref array x))))))
+
+(defun print-map (map)
+  "Prints a map, which must be a 2D array.  If a value in the map
+is T (indicating a space), then a '.' is printed.  If a value in the map
+is NIL (indicating a food pellet), then a '#' is printed.  If a value in
+the map is anything else, then it is simply PRINTed.  This allows you to
+consider spaces to be all sorts of stuff in case you'd like to print a
+trail of spaces on the map for example.  Returns NIL."
+  (let ((dim (array-dimensions map)))
+    (dotimes (y (second dim) nil)
+      (format t "~%")
+      (dotimes (x (first dim))
+  (format t "~a"
+    (let ((v (aref map x y)))
+        (cond ((equal v t) #\.)
+        ((null v) #\#)
+        (t v))))))))
+
+
+
+
+(defmacro absolute-direction (relative-dir ant-dir)
+  "If the ant is facing ANT-DIR, then converts the perceived
+RELATIVE-DIR direction into an absolute ('true') direction
+and returns that."
+  `(mod (+ ,relative-dir ,ant-dir) 4))
+
+(defmacro x-pos-at (x-pos absolute-dir &optional (steps 1))
+  "Returns the new x position if one moved STEPS steps the absolute-dir
+direction from the given x position.  Toroidal."
+  `(mod (cond ((= (mod ,absolute-dir 2) *n*) ,x-pos)         ;; n or s
+              ((= ,absolute-dir *e*) (+ ,x-pos ,steps))     ;; e
+              (t (+ ,x-pos (- ,steps) *map-width*)))         ;; w
+  *map-width*))
+
+(defmacro y-pos-at (y-pos absolute-dir &optional (steps 1))
+  "Returns the new y position if onee moved STEPS steps in the absolute-dir
+direction from the given y position.  Toroidal."
+  `(mod (cond ((= (mod ,absolute-dir 2) *e*) ,y-pos)        ;; e or w
+              ((= ,absolute-dir *s*) (+ ,y-pos ,steps))     ;; s
+              (t (+ ,y-pos (- ,steps) *map-height*)))       ;; n
+  *map-height*))
+
+
+(defparameter *current-move* 0 "The move # that the ant is at right now")
+(defparameter *num-moves* 600 "How many moves the ant may make")
+(defparameter *current-x-pos* 0 "The current X position of the ant")
+(defparameter *current-y-pos* 0 "The current Y position of the ant")
+(defparameter *current-ant-dir* *e* "The current direction the ant is facing")
+(defparameter *eaten-pellets* 0 "How many pellets the ant has eaten so far")
+(defparameter *map* (make-map *map-strs*) "The ant's map")
+
+
+#|(defun if-i-move(direction)
+  (let ((to-position '()))
+    (cond ((eql direction *n*) (setf to-position (list (mod (1+ *current-x-pos*) *map-width*) *current-y-pos*)))
+    ((eql direction *s*) (setf to-position (list (if (minusp (1- *current-x-pos*)) (+ (1- *current-x-pos*) *map-width*) (1- *current-x-pos*)) *current-y-pos*)))
+    ((eql direction *w*) (setf to-position (list *current-x-pos* (if (minusp (1- *current-y-pos*)) (+ (1- *current-y-pos*) *map-width*) (1- *current-y-pos*)))))
+    ((eql direction *e*) (setf to-position (list *current-x-pos* (mod (1+ *current-y-pos*) *map-width*)))))
+    to-position))
+|#
+
+(defun food-found (x y)
+  (not (aref *map* x y)))
+
+
+(defmacro if-food-ahead (then else)
+  "If there is food directly ahead of the ant, then THEN is evaluated,
+else ELSE is evaluated"
+  ;; because this is an if/then statement, it MUST be implemented as a macro.
+  `(if (food-found (x-pos-at *current-x-pos* *current-ant-dir*) (y-pos-at *current-y-pos* *current-ant-dir*)) ,then ,else))
+
+
+(defun progn2 (arg1 arg2)
+    "Evaluates arg1 and arg2 in succession, then returns the value of arg2"
+    (eval arg1)
+    (eval arg2)
+    arg2)  ;; ...though in artificial ant, the return value isn't used ... 
+
+(defun progn3 (arg1 arg2 arg3)
+  "Evaluates arg1, arg2, and arg3 in succession, then returns the value of arg3"
+  (eval arg1)
+  (eval arg2)
+  (eval arg3)
+  arg3)
+
+
+(defun move()
+  (if (< *current-move* *num-moves*)
+      (let ((x  (x-pos-at *current-x-pos* *current-ant-dir*)) (y (y-pos-at *current-y-pos* *current-ant-dir*)))
+  (if (food-found x y)
+      (setf *eaten-pellets* (1+ *eaten-pellets*)))
+  (setf (aref *map* *current-x-pos* *current-y-pos*) (direction-to-arrow *current-ant-dir*))
+  (setf *current-x-pos* x)
+  (setf *current-y-pos* y)
+  (setf *current-move* (1+ *current-move*)))))
+
+(defun left()
+  (case *current-ant-dir*
+    (0 (setf *current-ant-dir* *w*))
+    (1 (setf *current-ant-dir* *n*))
+    (3 (setf *current-ant-dir* *s*))
+    (2 (setf *current-ant-dir* *e*)))
+  (setf *current-move* (1+ *current-move*)))
+
+(defun right()
+  (case *current-ant-dir*
+    (0 (setf *current-ant-dir* *e*))
+    (1 (setf *current-ant-dir* *s*))
+    (3 (setf *current-ant-dir* *w*))
+    (2 (setf *current-ant-dir* *n*)))
+  (setf *current-move* (1+ *current-move*)))
+
+(defun gp-artificial-ant-setup ()
+  "Sets up vals"
+  (setq *nonterminal-set* '((if-food-ahead 2) (progn2 2) (progn3 3)))
+  (setq *terminal-set* '(left right move))
+  (setq *map* (make-map *map-strs*))
+  (setq *current-move* 0)
+  (setq *eaten-pellets* 0))
+
+
+(defun gp-artificial-ant-evaluator (ind)
+  "Evaluates an individual by putting it in a fresh map and letting it run
+for *num-moves* moves.  The fitness is the number of pellets eaten -- thus
+more pellets, higher (better) fitness."
+  (setf *map* (make-map *map-strs*))
+  (setf *current-move* 0)
+  (setf *eaten-pellets* 0)
+  (setf *current-x-pos* 0)
+  (setf *current-y-pos* 0)
+  (setf *current-ant-dir* *e*)
+  (loop while (< *current-move* *num-moves*)
+      do (eval ind))
+  *eaten-pellets*)
