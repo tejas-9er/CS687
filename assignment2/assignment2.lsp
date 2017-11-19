@@ -47,7 +47,7 @@ new slot is created).  EQUALP is the test used for duplicates."
   (let ((fittest (random (length population))))
     (dotimes (i *tournament-size*)
       (let ((candidate (random (length population))))
-	(if (> (elt fitnesses candidate) (elt fitnesses fittest))
+	(if (> (* 1 (elt fitnesses candidate)) (* 1 (elt fitnesses fittest)))
 	    (setf fittest candidate))))
     (elt population fittest)))
 
